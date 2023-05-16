@@ -1,5 +1,7 @@
 ﻿using HipHopFile;
 using Newtonsoft.Json;
+using SharpDX.DXGI;
+using SharpDX;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -1202,9 +1204,60 @@ namespace IndustrialPark
         public void CopyAssetsToClipboard()
         {
             var clipboard = new AssetClipboard();
+            var assetQueue = new Queue<Asset>(currentlySelectedAssets);
+            var visitedAssets = new HashSet<Asset>();
 
-            foreach (Asset asset in currentlySelectedAssets)
+            while (assetQueue.Count != 0)
             {
+                Asset asset = assetQueue.Dequeue();
+                if (!visitedAssets.Add(asset))
+                {
+                    continue;
+                }
+
+                if (asset is EntityAsset entityAsset)
+                {
+                    if (MessageBox.Show($"Would you like to copy all objects that {asset.assetName} references?", "Include References", MessageBoxButtons.YesNo) == DialogResult.Yes)
+                    {
+                        // This should be made a function or something
+                        if (Program.MainForm != null && entityAsset.Surface != 0)
+                            foreach (ArchiveEditor ae in Program.MainForm.archiveEditors)
+                                if (ae.archive.ContainsAsset(entityAsset.Surface))
+                                    if (ae.archive.GetFromAssetID(entityAsset.Surface) is AssetSURF assetSurface)
+                                    {
+                                        assetQueue.Enqueue(assetSurface);
+                                        break;
+                                    }
+                        if (Program.MainForm != null && entityAsset.Model != 0)
+                            foreach (ArchiveEditor ae in Program.MainForm.archiveEditors)
+                                if (ae.archive.ContainsAsset(entityAsset.Model))
+                                    if (ae.archive.GetFromAssetID(entityAsset.Model) is AssetMODL assetModel)
+                                    {
+                                        assetQueue.Enqueue(assetModel);
+                                        break;
+                                    }
+                    }
+                }
+                if (asset is AssetMODL modelAsset)
+                {
+                    if (MessageBox.Show($"Would you like to copy all objects that {asset.assetName} references?", "Include References", MessageBoxButtons.YesNo) == DialogResult.Yes)
+                    {
+                        foreach (var texture in modelAsset.Textures)
+                        {
+                            var textureId = HexUIntTypeConverter.AssetIDFromString(texture + ".RW3");
+                            if (Program.MainForm != null)
+                            {
+                                foreach (ArchiveEditor ae in Program.MainForm.archiveEditors)
+                                    if (ae.archive.ContainsAsset(textureId))
+                                        if (ae.archive.GetFromAssetID(textureId) is AssetRWTX assetTexture)
+                                        {
+                                            assetQueue.Enqueue(assetTexture);
+                                            break;
+                                        }
+                            }
+                        }
+                    }
+                }
                 Section_AHDR AHDR = JsonConvert.DeserializeObject<Section_AHDR>(JsonConvert.SerializeObject(asset.BuildAHDR(platform.Endianness())));
 
                 if (asset is AssetSound)
