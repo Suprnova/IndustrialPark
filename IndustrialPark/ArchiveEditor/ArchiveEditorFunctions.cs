@@ -1201,6 +1201,70 @@ namespace IndustrialPark
                 UpdateReferencesOnCopy(referenceUpdate, newAHDRs);
         }
 
+        // Do not assume provided assetIDs are present in any open archive editors, could be invalid or boot archives
+        public List<Asset> ParseReferences(Asset asset)
+        {
+            var idsToAdd = new HashSet<AssetID>();
+            var texturesToAdd = new HashSet<string>();
+
+            // advanced functionality 
+            var type = asset.GetType();
+            var props = type.GetProperties();
+            foreach (var prop in props)
+                if (prop.PropertyType == typeof(AssetID))
+                    idsToAdd.Add((AssetID)prop.GetValue(asset));
+                else if (typeof(IEnumerable<AssetID>).IsAssignableFrom(prop.PropertyType))
+                    foreach (var id in (IEnumerable<AssetID>)prop.GetValue(asset))
+                        idsToAdd.Add(id);
+            if (asset is AssetMODL modelAsset)
+                texturesToAdd.UnionWith(modelAsset.Textures);// Assets linked to
+
+            if (asset is BaseAsset baseAsset)
+                foreach (var link in baseAsset.Links)
+                    idsToAdd.UnionWith(new List<AssetID> { link.TargetAsset, link.ArgumentAsset });
+
+            // Assets targetted by
+            // arbitrarily chosen assets to exclude due to risk of unneeded references, make efficient eventually
+            if (!(asset is AssetMODL || asset is AssetTEXT || asset is AssetDPAT || asset is AssetRWTX || asset is DynaGObjectTalkBox || asset is AssetALST || asset is AssetCAM || asset is AssetMVPT || asset is AssetMINF))
+            {
+                var targetters = FindWhoTargets(asset.assetID);
+                foreach (var targetter in targetters)
+                    idsToAdd.Add(targetter);
+            }
+
+            // simple functionality (todo: implement)
+            /*
+            if (asset is EntityAsset entityAsset) // Model, Surface, ALST
+                idsToAdd.UnionWith(new List<AssetID> { entityAsset.Model, entityAsset.Surface, entityAsset.Animation });
+            else if (asset is AssetMODL modelAsset) // Textures, TODO: LOD tables (via FindWhoTargets?)
+                texturesToAdd.UnionWith(modelAsset.Textures);
+            else if (asset is AssetALST animListAsset) // Animations (might be zeroed)
+                idsToAdd.UnionWith(animListAsset.Animations);
+            */
+
+            var referencedAssets = new HashSet<Asset>();
+
+            if (texturesToAdd.Count != 0)
+            {
+                foreach (string texture in texturesToAdd)
+                    // TODO: asset may not be appended with .RW3, check without extension & ensure it's a texture asset
+                    idsToAdd.Add(HexUIntTypeConverter.AssetIDFromString(texture + ".RW3"));
+            }
+
+            if (idsToAdd.Count != 0)
+                foreach (AssetID assetID in idsToAdd)
+                    if (Program.MainForm != null && assetID != 0)
+                        foreach (ArchiveEditor ae in Program.MainForm.archiveEditors)
+                            if (ae.archive.ContainsAsset(assetID))
+                            {
+                                referencedAssets.Add(ae.archive.GetFromAssetID(assetID));
+                                break;
+                            }
+
+            return referencedAssets.ToList();
+
+        }
+
         public void CopyAssetsToClipboard()
         {
             var clipboard = new AssetClipboard();
@@ -1211,53 +1275,14 @@ namespace IndustrialPark
             {
                 Asset asset = assetQueue.Dequeue();
                 if (!visitedAssets.Add(asset))
-                {
                     continue;
-                }
 
-                if (asset is EntityAsset entityAsset)
-                {
-                    if (MessageBox.Show($"Would you like to copy all objects that {asset.assetName} references?", "Include References", MessageBoxButtons.YesNo) == DialogResult.Yes)
-                    {
-                        // This should be made a function or something
-                        if (Program.MainForm != null && entityAsset.Surface != 0)
-                            foreach (ArchiveEditor ae in Program.MainForm.archiveEditors)
-                                if (ae.archive.ContainsAsset(entityAsset.Surface))
-                                    if (ae.archive.GetFromAssetID(entityAsset.Surface) is AssetSURF assetSurface)
-                                    {
-                                        assetQueue.Enqueue(assetSurface);
-                                        break;
-                                    }
-                        if (Program.MainForm != null && entityAsset.Model != 0)
-                            foreach (ArchiveEditor ae in Program.MainForm.archiveEditors)
-                                if (ae.archive.ContainsAsset(entityAsset.Model))
-                                    if (ae.archive.GetFromAssetID(entityAsset.Model) is AssetMODL assetModel)
-                                    {
-                                        assetQueue.Enqueue(assetModel);
-                                        break;
-                                    }
-                    }
-                }
-                if (asset is AssetMODL modelAsset)
-                {
-                    if (MessageBox.Show($"Would you like to copy all objects that {asset.assetName} references?", "Include References", MessageBoxButtons.YesNo) == DialogResult.Yes)
-                    {
-                        foreach (var texture in modelAsset.Textures)
-                        {
-                            var textureId = HexUIntTypeConverter.AssetIDFromString(texture + ".RW3");
-                            if (Program.MainForm != null)
-                            {
-                                foreach (ArchiveEditor ae in Program.MainForm.archiveEditors)
-                                    if (ae.archive.ContainsAsset(textureId))
-                                        if (ae.archive.GetFromAssetID(textureId) is AssetRWTX assetTexture)
-                                        {
-                                            assetQueue.Enqueue(assetTexture);
-                                            break;
-                                        }
-                            }
-                        }
-                    }
-                }
+                var referencedAssets = ParseReferences(asset);
+
+                if (referencedAssets.Count != 0 && MessageBox.Show($"Would you like to copy all objects that [{asset.TypeString}] {asset.assetName} references?", "Include References", MessageBoxButtons.YesNo) == DialogResult.Yes)
+                    foreach (Asset referencedAsset in referencedAssets)
+                        assetQueue.Enqueue(referencedAsset);
+
                 Section_AHDR AHDR = JsonConvert.DeserializeObject<Section_AHDR>(JsonConvert.SerializeObject(asset.BuildAHDR(platform.Endianness())));
 
                 if (asset is AssetSound)
