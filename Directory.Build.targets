@@ -15,6 +15,14 @@
 	<DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
   </PropertyGroup>
 
+  <ItemGroup Condition="'$(OutputType)' == 'WinExe'">
+	<Content Include="$(MSBuildThisFileDirectory)LICENSE">
+	  <Link>LICENSE</Link>
+	  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  <Visible>false</Visible>
+	</Content>
+  </ItemGroup>
+
   <Target Name="StageAndPruneOutputAssemblies"
 		  AfterTargets="CopyFilesToOutputDirectory"
 		  Condition="'$(OutputType)' == 'WinExe'">

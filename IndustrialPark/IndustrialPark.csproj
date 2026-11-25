@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
 	<LangVersion>preview</LangVersion>
@@ -122,6 +122,11 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <Content Include="..\README.md">
+      <Link>README.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
     <Content Include="icon.ico" />
     <Content Include="Resources\Models\ArrowDefault.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
