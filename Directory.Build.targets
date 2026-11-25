@@ -21,6 +21,11 @@
 	  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  <Visible>false</Visible>
 	</Content>
+	<Content Include="$(MSBuildThisFileDirectory)THIRD-PARTY-NOTICES.txt">
+	  <Link>THIRD-PARTY-NOTICES.txt</Link>
+	  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  <Visible>false</Visible>
+	</Content>
   </ItemGroup>
 
   <Target Name="StageAndPruneOutputAssemblies"
